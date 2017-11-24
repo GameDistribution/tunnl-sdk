@@ -140,9 +140,14 @@ class VideoAd {
             this._startSafetyTimer(4000, 'LOADED');
             // Show the advertisement container.
             if (this.adContainer) {
-                this.adContainer.style.display = 'block';
+                this.adContainer.style.transform =
+                    'translateX(0)';
                 if (this.parentAdContainer) {
-                    this.parentAdContainer.style.display = 'block';
+                    this.parentAdContainer.style.transform =
+                        'translateX(0)';
+                    // Sometimes our client set the container to display none.
+                    this.parentAdContainer.style.display =
+                        'block';
                 }
                 setTimeout(() => {
                     this.adContainer.style.opacity = 1;
@@ -280,9 +285,11 @@ class VideoAd {
                 this.parentAdContainer.style.opacity = 0;
             }
             setTimeout(() => {
-                this.adContainer.style.display = 'none';
+                this.adContainer.style.transform =
+                    'translateX(-9999px)';
                 if (this.parentAdContainer) {
-                    this.parentAdContainer.style.display = 'none';
+                    this.parentAdContainer.style.transform =
+                        'translateX(-9999px)';
                 }
             }, this.containerTransitionSpeed);
         }
@@ -409,7 +416,6 @@ class VideoAd {
 
         this.adContainer = document.createElement('div');
         this.adContainer.id = this.options.prefix + 'advertisement';
-        this.adContainer.style.display = 'none';
         this.adContainer.style.position = (this.parentAdContainer)
             ? 'absolute'
             : 'fixed';
@@ -736,9 +742,11 @@ class VideoAd {
                     this.parentAdContainer.style.opacity = 0;
                 }
                 setTimeout(() => {
-                    this.adContainer.style.display = 'none';
+                    this.adContainer.style.transform =
+                        'translateX(-9999px)';
                     if (this.parentAdContainer) {
-                        this.parentAdContainer.style.display = 'none';
+                        this.parentAdContainer.style.transform =
+                            'translateX(-9999px)';
                     }
                 }, this.containerTransitionSpeed);
             }
