@@ -1,0 +1,41 @@
+<html>
+<head>
+</head>
+<body style="margin: 0; padding: 0; background: linear-gradient(90deg,#1b3786,#24b3c0);">
+
+<div id="preroll" style="background: black; width: 640px; height: 360px; margin: auto;"></div>
+
+<script>
+    var vooxePreroll = {
+        gameId: '1d70d055-d2dd-4819-8c8f-a7aacb5dcbd3',
+        aId: 'A-Q6J15',
+        container: 'preroll',
+        width: '100%',
+        height: '600px',
+        adtype: 'html',
+        bgColor: '#ffffff',
+        spinner: {enabled: true, color: '#00CCFF', radius: 50},
+        resumeGame: function() {
+            // ...
+        },
+        pauseGame: function() {
+            // ...
+        },
+    };
+    (function(i, s, o, g, r, a, m) {
+        i['GameDistribution'] = r;
+        i[r] = i[r] || function() {(i[r].q = i[r].q || []).push(arguments);};
+        i[r].l = 1 * new Date();
+        a = s.createElement(o);
+        m = s.getElementsByTagName(o)[0];
+        a.async = 1;
+        a.src = g;
+        m.parentNode.insertBefore(a, m);
+    })(window, document, 'script',
+        // 'http://preroll.api.gamedistribution.com/preroll/libs/gd/api.min.js',
+        '/lib/main.min.js',
+        'tunnl');
+    tunnl(vooxePreroll);
+</script>
+</body>
+</html>
