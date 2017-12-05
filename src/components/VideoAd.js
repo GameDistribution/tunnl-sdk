@@ -131,7 +131,7 @@ class VideoAd {
     start() {
         // Start ticking our safety timer. If the whole advertisement
         // thing doesn't resolve without our set time, then screw this.
-        this._startSafetyTimer(8000, 'start()');
+        this._startSafetyTimer(12000, 'start()');
         this.eventBus.subscribe('LOADED', () => {
             // Start our safety timer every time an ad is loaded.
             // It can happen that an ad loads and starts, but has an error
