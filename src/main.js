@@ -86,11 +86,20 @@ class SDK {
         console.log.apply(console, banner);
         /* eslint-enable */
 
+        const url = (document.location.href.indexOf('localhost') !== -1)
+            ? 'https://gamedistribution.com/'
+            : document.location.href;
+
         // Call Google Analytics.
         this._googleAnalytics();
 
         // Call Death Star.
         this._deathStar();
+
+        // Record a game "play"-event in Tunnl.
+        (new Image()).src = 'https://ana.tunnl.com/event' +
+            '?page_url=' + encodeURIComponent(url) +
+            '&eventtype=1';
 
         // Setup all event listeners.
         // We also send a Google Analytics event for each one of our events.
@@ -179,9 +188,6 @@ class SDK {
             : '';
 
         // Create the actual ad tag.
-        const url = (document.location.href.indexOf('localhost') !== -1)
-            ? 'https://gamedistribution.com/'
-            : document.location.href;
         this.videoAdInstance.tag = 'https://pub.tunnl.com/opp' +
             '?page_url=' + encodeURIComponent(url) +
             '&player_width=640' +
@@ -205,14 +211,12 @@ class SDK {
             console.log(error);
         }
 
-        this.videoAdInstance.start();
-
         // Ad ready or failed.
         // Setup our video ad promise, which should be resolved before an ad
         // can be called from a click event.
         this.videoAdPromise = new Promise((resolve, reject) => {
             // The ad is preloaded and ready.
-            this.eventBus.subscribe('AD_SDK_MANAGER_READY', (arg) => resolve());
+            this.eventBus.subscribe('AD_SDK_LOADER_READY', (arg) => resolve());
             // The IMA SDK failed.
             this.eventBus.subscribe('AD_SDK_ERROR', (arg) => reject());
             // It can happen that the first ad request failed... unlucky.
