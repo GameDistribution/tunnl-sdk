@@ -130,6 +130,22 @@ class ImplementationTest {
         const demoAd = document.getElementById('tunnl-demo');
         const midrollTimer = document.getElementById('tunnl-midrollTimer');
 
+        if (localStorage.getItem('tunnl_tag')) {
+            demoAd.innerHTML = 'Revert Vast tag';
+            demoAd.style.background = '#ff8c1c';
+        } else {
+            demoAd.innerHTML = 'Demo VAST tag';
+            demoAd.style.background = '#44a5ab';
+        }
+
+        if (localStorage.getItem('tunnl_midroll')) {
+            midrollTimer.innerHTML = 'Revert delay';
+            midrollTimer.style.background = '#ff8c1c';
+        } else {
+            midrollTimer.innerHTML = 'Disable delay';
+            midrollTimer.style.background = '#44a5ab';
+        }
+
         pauseGame.addEventListener('click', () => {
             window.tunnl.onPause();
         });

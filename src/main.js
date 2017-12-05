@@ -165,79 +165,52 @@ class SDK {
         this.adRequestTimer = undefined;
         this.adRequestDelay = 60000;
 
-        // Get urls.
-        const url = document.location.href;
-        const domain = document.location.host;
+        // Start our advertisement instance. Setting up the
+        // adsLoader should resolve VideoAdPromise.
+        this.videoAdInstance = new VideoAd(this.options);
 
-        // Tunnl.
-        // Get the affiliate id from Tunnl.
-        // If it fails we continue the game, so this should always resolve.
-        const adTagIdPromise = new Promise((resolve) => {
-            const adTagIdUrl = 'https://ana.tunnl.com/at?id=&pageurl=' + domain + '&type=4';
-            const adTagIdRequest = new Request(adTagIdUrl, {method: 'GET'});
-            let adTagId = 'T-17112273223';
-            fetch(adTagIdRequest).then(response => {
-                const contentType = response.headers.get('content-type');
-                if (contentType &&
-                    contentType.includes('application/json')) {
-                    return response.json();
-                } else {
-                    throw new TypeError('Oops, we didn\'t get JSON!');
+        // We still have a lot of games not using a user action to
+        // start an advertisement. Causing the video ad to be paused,
+        // as auto play is not supported.
+        const mobile = (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) ||
+            (navigator.userAgent.toLowerCase().indexOf('android') > -1);
+        const adType = (mobile)
+            ? '&ad_type=image'
+            : '';
+
+        // Create the actual ad tag.
+        const url = (document.location.href.indexOf('localhost') !== -1)
+            ? 'https://gamedistribution.com/'
+            : document.location.href;
+        this.videoAdInstance.tag = 'https://pub.tunnl.com/opp' +
+            '?page_url=' + encodeURIComponent(url) +
+            '&player_width=640' +
+            '&player_height=480' + adType;
+
+        // Enable some debugging perks.
+        try {
+            if (localStorage.getItem('tunnl_debug')) {
+                // So we can set a custom tag.
+                if (localStorage.getItem('tunnl_tag')) {
+                    this.videoAdInstance.tag =
+                        localStorage.getItem('tunnl_tag');
                 }
-            }).then(json => {
-                if (json.AdTagId) {
-                    adTagId = json.AdTagId;
-                    dankLog('SDK_TAG_ID_READY', adTagId, 'success');
-                    resolve(adTagId);
-                } else {
-                    dankLog('SDK_TAG_ID_READY', adTagId, 'warning');
+                // So we can call mid rolls quickly.
+                if (localStorage.getItem('tunnl_midroll')) {
+                    this.adRequestDelay =
+                        localStorage.getItem('tunnl_midroll');
                 }
-                resolve(adTagId);
-            }).catch((error) => {
-                dankLog('SDK_TAG_ID_READY', error, 'warning');
-                resolve(adTagId);
-            });
-        });
-
-        // Create the ad tag.
-        // This promise can trigger the videoAdPromise.
-        adTagIdPromise.then((response) => {
-            // Start our advertisement instance. Setting up the
-            // adsLoader should resolve VideoAdPromise.
-            this.videoAdInstance = new VideoAd(this.options);
-
-            // Create the actual ad tag.
-            this.videoAdInstance.tag = 'https://pub.tunnl.com/' +
-                'opp?tid=' + response +
-                '&player_width=640' +
-                '&player_height=480' +
-                '&page_url=' + encodeURIComponent(url);
-
-            // Enable some debugging perks.
-            try {
-                if (localStorage.getItem('tunnl_debug')) {
-                    // So we can set a custom tag.
-                    if (localStorage.getItem('tunnl_tag')) {
-                        this.videoAdInstance.tag =
-                            localStorage.getItem('tunnl_tag');
-                    }
-                    // So we can call mid rolls quickly.
-                    if (localStorage.getItem('tunnl_midroll')) {
-                        this.adRequestDelay =
-                            localStorage.getItem('tunnl_midroll');
-                    }
-                }
-            } catch (error) {
-                console.log(error);
             }
+        } catch (error) {
+            console.log(error);
+        }
 
-            this.videoAdInstance.start();
-        });
+        this.videoAdInstance.start();
 
         // Ad ready or failed.
         // Setup our video ad promise, which should be resolved before an ad
         // can be called from a click event.
-        const videoAdPromise = new Promise((resolve, reject) => {
+        this.videoAdPromise = new Promise((resolve, reject) => {
             // The ad is preloaded and ready.
             this.eventBus.subscribe('AD_SDK_MANAGER_READY', (arg) => resolve());
             // The IMA SDK failed.
@@ -248,10 +221,7 @@ class SDK {
 
         // Now check if everything is ready.
         // We use default SDK data if the promise fails.
-        this.readyPromise = Promise.all([
-            adTagIdPromise,
-            videoAdPromise,
-        ]).then(() => {
+        this.videoAdPromise.then(() => {
             let eventName = 'SDK_READY';
             let eventMessage = 'Everything is ready.';
             this.eventBus.broadcast(eventName, {
@@ -388,7 +358,7 @@ class SDK {
      * @public
      */
     showBanner() {
-        this.readyPromise.then(() => {
+        this.videoAdPromise.then(() => {
             // Check if ad is not called too often.
             if (typeof this.adRequestTimer !== 'undefined') {
                 const elapsed = (new Date()).valueOf() -
