@@ -12,13 +12,14 @@ Monetization, game, video distribution and more.
 Running into any issues? Check out the F.A.Q. within the Wiki of the github repository before mailing to <a href="info@tunnl.com" target="_blank">info@tunnl.com</a>
 
 ## Implementation 
-The SDK should be integrated within the web page itself by loading it through our CDN. Specific information of the SDK features and usages can be found at the <a href="https://github.com/gamedistribution/TUNNL-SDK/wiki" target="_blank">wiki</a>.
+The SDK should be integrated within the web page itself by loading it through our CDN. Specific information of the SDK features and usages can be found at the <a href="https://github.com/gamedistribution/tunnl-sdk/wiki" target="_blank">wiki</a>.
 
 ### CDN
 Add the following script to your document.
 ```
 var TUNNL_OPTIONS = {
     debug: false,
+    container: 'preroll',
     onEvent: function(event) {
         switch (event.name) {
             case 'SDK_CONTENT_START':
@@ -62,7 +63,7 @@ tunnl.openConsole();
 
 ## Repository
 The SDK is maintained on a public github repository.
-<a href="https://github.com/gamedistribution/TUNNL-SDK" target="_blank">https://github.com/gamedistribution/TUNNL-SDK</a>
+<a href="https://github.com/gamedistribution/tunnl-sdk" target="_blank">https://github.com/gamedistribution/tunnl-sdk</a>
 
 ## Deployment
 Deployment of the SDK to production environments is done through TeamCity.

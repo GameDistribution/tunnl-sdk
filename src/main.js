@@ -236,7 +236,10 @@ class SDK {
             if (this.videoAdInstance.options.autoplay) {
                 this.videoAdInstance.play();
                 this.adRequestTimer = new Date();
+            } else {
+                this.onResume('Just resume to the content...', 'success');
             }
+
             let eventName = 'SDK_READY';
             let eventMessage = 'Everything is ready.';
             this.eventBus.broadcast(eventName, {

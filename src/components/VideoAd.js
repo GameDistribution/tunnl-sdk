@@ -55,6 +55,17 @@ class VideoAd {
             '&unviewed_position_start=1&cust_params=deployment%3Ddevsite' +
             '%26sample_ct%3Dlinear&correlator=';
 
+        // If our user wants to load the ad within a container.
+        this.thirdPartyContainer = (this.options.container)
+            ? document.getElementById(this.options.container)
+            : null;
+
+        // Set needed dimensions of the third party container if not set.
+        if (this.thirdPartyContainer) {
+            this.thirdPartyContainer.style.width = this.options.width;
+            this.thirdPartyContainer.style.height = this.options.height;
+        }
+
         // Make sure given width and height doesn't contain non-numbers.
         this.options.width = (Number.isInteger(this.options.width))
             ? this.options.width
@@ -63,38 +74,25 @@ class VideoAd {
                 : this.options.width.replace(/[^0-9]/g, '');
         this.options.height = (Number.isInteger(this.options.height))
             ? this.options.height
-            : this.options.height.replace(/[^0-9]/g, '');
+            : (this.options.height === '100%')
+                ? 360
+                : this.options.height.replace(/[^0-9]/g, '');
 
-        // If our user wants to load the ad within a container.
-        this.parentAdContainer = (this.options.container)
-            ? document.getElementById(this.options.container)
-            : null;
-        // Now make sure the parentAdContainer and its parent are
-        // absolute or relative, otherwise our adContainer will go floating
-        // about as its absolute.
-        if (this.parentAdContainer) {
-            if (this.parentAdContainer.style.position !== 'absolute' ||
-                this.parentAdContainer.style.position !== 'fixed') {
-                // Is our parent tall enough? We need a minimum height if
-                // we want to position our ad using absolute.
-                // The parentAdContainer must have an offsetHeight for
-                // responsive ads. Easiest is to not assign the container
-                // option if you want responsive ads.
-                if (this.parentAdContainer.offsetHeight <= 0) {
-                    this.parentAdContainer.style.position = 'relative';
-                    this.parentAdContainer.style.height =
-                        this.options.height + 'px';
-                } else {
-                    this.parentAdContainer.style.position = 'absolute';
-                    this.parentAdContainer.style.zIndex = 99;
-                    this.parentAdContainer.style.top = 0;
-                    this.parentAdContainer.style.left = 0;
-                }
-            }
-            // Make sure the given container has a width.
-            if (this.parentAdContainer.offsetWidth <= 0) {
-                this.parentAdContainer.style.width = this.options.width + 'px';
-            }
+        // Enable a responsive advertisement.
+        // Assuming we only want responsive advertisements
+        // below 1024 pixel client width. Reason for this is that some
+        // advertisers buy based on ad size.
+        this.options.responsive = (this.options.responsive &&
+            document.documentElement.clientWidth <= 1024);
+        if (this.options.responsive || this.thirdPartyContainer) {
+            // Check if the ad container is not already set.
+            // This is usually done when using the Flash SDK.
+            this.options.width = (this.thirdPartyContainer)
+                ? this.thirdPartyContainer.offsetWidth
+                : document.documentElement.clientWidth;
+            this.options.height = (this.thirdPartyContainer)
+                ? this.thirdPartyContainer.offsetHeight
+                : document.documentElement.clientHeight;
         }
 
         // Subscribe to the LOADED event as we will want to clear our initial
@@ -139,13 +137,18 @@ class VideoAd {
                     audio.volume = 0;
                     audio.addEventListener('playing', () => {
                         this.options.autoplay = true;
-                    }, false);
-                    audio.src = src;
-                    setTimeout(() => {
                         dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
                             'success');
                         resolve();
-                    }, 100);
+                    }, false);
+                    audio.src = src;
+                    setTimeout(() => {
+                        if (!this.options.autoplay) {
+                            dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
+                                'success');
+                            resolve();
+                        }
+                    }, 500);
                 } catch (error) {
                     dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
                         'warning');
@@ -231,14 +234,16 @@ class VideoAd {
         // Hide the advertisement.
         if (this.adContainer) {
             this.adContainer.style.opacity = 0;
-            if (this.parentAdContainer) {
-                this.parentAdContainer.style.opacity = 0;
+            if (this.thirdPartyContainer) {
+                this.thirdPartyContainer.style.opacity = 0;
             }
             setTimeout(() => {
+                // We do not use display none. Otherwise element.offsetWidth
+                // and height will return 0px.
                 this.adContainer.style.transform =
                     'translateX(-9999px)';
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.transform =
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.transform =
                         'translateX(-9999px)';
                 }
             }, this.containerTransitionSpeed);
@@ -374,7 +379,7 @@ class VideoAd {
 
         this.adContainer = document.createElement('div');
         this.adContainer.id = this.options.prefix + 'advertisement';
-        this.adContainer.style.position = (this.parentAdContainer)
+        this.adContainer.style.position = (this.thirdPartyContainer)
             ? 'absolute'
             : 'fixed';
         this.adContainer.style.zIndex = 99;
@@ -382,17 +387,25 @@ class VideoAd {
         this.adContainer.style.left = 0;
         this.adContainer.style.width = '100%';
         this.adContainer.style.height = '100%';
+        this.adContainer.style.transform = 'translateX(-9999px)';
         this.adContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
         this.adContainer.style.opacity = 0;
         this.adContainer.style.transition = 'opacity ' +
             this.containerTransitionSpeed +
             'ms cubic-bezier(0.55, 0, 0.1, 1)';
+        if (this.thirdPartyContainer) {
+            this.thirdPartyContainer.style.transform = 'translateX(-9999px)';
+            this.thirdPartyContainer.style.opacity = 0;
+            this.thirdPartyContainer.style.transition = 'opacity ' +
+                this.containerTransitionSpeed +
+                'ms cubic-bezier(0.55, 0, 0.1, 1)';
+        }
 
         const adContainerInner = document.createElement('div');
         adContainerInner.id = this.options.prefix + 'advertisement_slot';
         adContainerInner.style.position = 'absolute';
         adContainerInner.style.backgroundColor = '#000000';
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             adContainerInner.style.top = 0;
             adContainerInner.style.left = 0;
         } else {
@@ -406,9 +419,9 @@ class VideoAd {
 
         // Append the adContainer to our Flash container, when using the
         // Flash SDK implementation.
-        if (this.parentAdContainer) {
+        if (this.thirdPartyContainer) {
             this.adContainer.appendChild(adContainerInner);
-            this.parentAdContainer.appendChild(this.adContainer);
+            this.thirdPartyContainer.appendChild(this.adContainer);
         } else {
             this.adContainer.appendChild(adContainerInner);
             body.appendChild(this.adContainer);
@@ -416,13 +429,13 @@ class VideoAd {
 
         // We need to resize our adContainer
         // when the view dimensions change.
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             window.addEventListener('resize', () => {
-                this.options.width = (this.parentAdContainer)
-                    ? this.parentAdContainer.offsetWidth
+                this.options.width = (this.thirdPartyContainer)
+                    ? this.thirdPartyContainer.offsetWidth
                     : document.documentElement.clientWidth;
-                this.options.height = (this.parentAdContainer)
-                    ? this.parentAdContainer.offsetHeight
+                this.options.height = (this.thirdPartyContainer)
+                    ? this.thirdPartyContainer.offsetHeight
                     : document.documentElement.clientHeight;
                 adContainerInner.style.width = this.options.width + 'px';
                 adContainerInner.style.height = this.options.height + 'px';
@@ -542,7 +555,10 @@ class VideoAd {
             adsRequest.nonLinearAdSlotWidth = this.options.width;
             adsRequest.nonLinearAdSlotHeight = this.options.height;
 
-            // We don't want overlays as we do not support video!
+            // We don't want overlays as we do not have
+            // a video player as underlying content!
+            // Non-linear ads usually do not invoke the ALL_ADS_COMPLETED.
+            // That would cause lots of problems of course...
             adsRequest.forceNonLinearFullSlot = true;
 
             // Get us some ads!
@@ -636,7 +652,7 @@ class VideoAd {
             this._onAdEvent.bind(this), this);
 
         // We need to resize our adContainer when the view dimensions change.
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             window.addEventListener('resize', () => {
                 this.adsManager.resize(this.options.width, this.options.height,
                     google.ima.ViewMode.NORMAL);
@@ -700,18 +716,21 @@ class VideoAd {
             eventMessage = 'Fired when content should be paused. This ' +
                 'usually happens right before an ad is about to cover ' +
                 'the content.';
+
             // Show the advertisement container.
             if (this.adContainer) {
                 this.adContainer.style.transform =
                     'translateX(0)';
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.transform =
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.transform =
                         'translateX(0)';
                 }
                 setTimeout(() => {
                     this.adContainer.style.opacity = 1;
-                    if (this.parentAdContainer) {
-                        this.parentAdContainer.style.opacity = 1;
+                    if (this.thirdPartyContainer) {
+                        this.thirdPartyContainer.style.opacity = 1;
+                        // Sometimes the third party sets our container to none.
+                        this.thirdPartyContainer.style.display = 'block';
                     }
                 }, 10);
             }
@@ -724,14 +743,16 @@ class VideoAd {
             // Hide the advertisement.
             if (this.adContainer) {
                 this.adContainer.style.opacity = 0;
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.opacity = 0;
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.opacity = 0;
                 }
                 setTimeout(() => {
+                    // We do not use display none. Otherwise element.offsetWidth
+                    // and height will return 0px.
                     this.adContainer.style.transform =
                         'translateX(-9999px)';
-                    if (this.parentAdContainer) {
-                        this.parentAdContainer.style.transform =
+                    if (this.thirdPartyContainer) {
+                        this.thirdPartyContainer.style.transform =
                             'translateX(-9999px)';
                     }
                 }, this.containerTransitionSpeed);
