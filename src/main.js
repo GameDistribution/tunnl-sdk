@@ -96,7 +96,7 @@ class SDK {
         // Call Death Star.
         this._deathStar();
 
-        // Record a game "play"-event in Tunnl.
+        // Record a "view"-event in Tunnl.
         (new Image()).src = 'https://ana.tunnl.com/event' +
             '?page_url=' + encodeURIComponent(url) +
             '&eventtype=1';
@@ -169,8 +169,7 @@ class SDK {
         this.eventBus.subscribe('VOLUME_CHANGED', (arg) => this._onEvent(arg));
         this.eventBus.subscribe('VOLUME_MUTED', (arg) => this._onEvent(arg));
 
-        // Only allow ads after the preroll and after a certain amount of time.
-        // This time restriction is available from gameData.
+        // Only allow ads after the pre-roll and after a certain amount of time.
         this.adRequestTimer = undefined;
         this.adRequestDelay = 60000;
 
@@ -178,9 +177,8 @@ class SDK {
         // adsLoader should resolve VideoAdPromise.
         this.videoAdInstance = new VideoAd(this.options);
 
-        // We still have a lot of games not using a user action to
-        // start an advertisement. Causing the video ad to be paused,
-        // as auto play is not supported.
+        // Auto play of video advertisements won't work on mobile devices.
+        // Causing the video to be paused.
         const mobile = (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) ||
             (navigator.userAgent.toLowerCase().indexOf('android') > -1);
         const adType = (mobile)
@@ -214,7 +212,7 @@ class SDK {
 
         // Ad ready or failed.
         // Setup our video ad promise, which should be resolved before an ad
-        // can be called from a click event.
+        // can be called.
         this.videoAdPromise = new Promise((resolve, reject) => {
             // The ad is preloaded and ready.
             this.eventBus.subscribe('AD_SDK_LOADER_READY', (arg) => resolve());
@@ -225,8 +223,20 @@ class SDK {
         });
 
         // Now check if everything is ready.
-        // We use default SDK data if the promise fails.
         this.videoAdPromise.then(() => {
+            // Handle auto play behaviour.
+            // Video auto play capabilities are tested within the
+            // VideoAd constructor. We have to test this because browsers will
+            // slowly stop support for auto play.
+            // Thus we check if auto play is enabled and supported.
+            // If so, then we start the adRequestTimer, blocking any attempts
+            // to call any subsequent advertisement too soon, as the ad
+            // will be called automatically from our video advertisement
+            // instance, instead of calling the showBanner method.
+            if (this.videoAdInstance.options.autoplay) {
+                this.videoAdInstance.play();
+                this.adRequestTimer = new Date();
+            }
             let eventName = 'SDK_READY';
             let eventMessage = 'Everything is ready.';
             this.eventBus.broadcast(eventName, {
@@ -253,22 +263,6 @@ class SDK {
                 },
             });
             return false;
-        });
-
-        // Handle auto play behaviour.
-        // Video auto play capabilities are tested within the
-        // VideoAd constructor. We have to test this because browsers will
-        // slowly stop support for auto play.
-        this.videoAdPromise.then(() => {
-            // Check if auto play is enabled and supported. If so, then we
-            // start the adRequestTimer, blocking any attempts
-            // to call any subsequent advertisement too soon, as the ad
-            // will be called automatically from our video advertisement
-            // instance, instead of calling the showBanner method.
-            if (this.videoAdInstance.options.autoplay) {
-                this.videoAdInstance.play();
-                this.adRequestTimer = new Date();
-            }
         });
     }
 
@@ -389,7 +383,7 @@ class SDK {
                         'The advertisement was requested too soon after ' +
                         'the previous advertisement was finished.',
                         'warning');
-                    // Resume game for legacy purposes.
+                    // Resume to content for legacy purposes.
                     this.onResume(
                         'Just resume to the content...',
                         'success');
@@ -416,8 +410,7 @@ class SDK {
      * onResume
      * Called from various moments within the SDK. This sends
      * out a callback to our developer, so he/ she can allow the content to
-     * resume again. We also call resume() for backwards
-     * compatibility reasons.
+     * resume again.
      * @param {String} message
      * @param {String} status
      */
@@ -439,8 +432,7 @@ class SDK {
     /**
      * onPause
      * Called from various moments within the SDK. This sends
-     * out a callback to pause the content. It is required to have the game
-     * paused when an advertisement starts playing.
+     * out a callback to pause the content.
      * @param {String} message
      * @param {String} status
      */
@@ -463,7 +455,7 @@ class SDK {
      * openConsole
      * Enable debugging, we also set a value in localStorage,
      * so we can also enable debugging without setting the property.
-     * This is nice for when we're trying to debug a game that is not ours.
+     * This is nice for when we're trying to debug content that is not ours.
      * @public
      */
     openConsole() {

@@ -506,7 +506,7 @@ class VideoAd {
             return;
         }
 
-        // First check if we can run ads. If the game is embedded within a
+        // First check if we can run ads. If the content is embedded within a
         // Phone Gap/ Cordova app, then we're not allowed.
         if (navigator.userAgent.match(/Crosswalk/i) ||
             typeof window.cordova !== 'undefined') {
@@ -568,7 +568,7 @@ class VideoAd {
         adsRenderingSettings.restoreCustomPlaybackStateOnAdBreakComplete = true;
 
         // We don't set videoContent as in the Google IMA example docs,
-        // cause we run a game, not an ad.
+        // cause we run on top of content, not an ad.
         this.adsManager = adsManagerLoadedEvent.getAdsManager(
             adsRenderingSettings);
 

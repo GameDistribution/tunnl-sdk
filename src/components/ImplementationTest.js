@@ -95,8 +95,8 @@ class ImplementationTest {
                     </div>
                     <div>
                         <h2>Content</h2>
-                        <button id="tunnl-pauseGame">Pause</button>
-                        <button id="tunnl-resumeGame">Resume</button>
+                        <button id="tunnl-pause">Pause</button>
+                        <button id="tunnl-resume">Resume</button>
                     </div>
                 </div>
             </div>
@@ -123,8 +123,8 @@ class ImplementationTest {
         body.parentNode.insertBefore(container, body);
 
         // Add listeners
-        const pauseGame = document.getElementById('tunnl-pauseGame');
-        const resumeGame = document.getElementById('tunnl-resumeGame');
+        const pauseContent = document.getElementById('tunnl-pause');
+        const resumeContent = document.getElementById('tunnl-resume');
         const showBanner = document.getElementById('tunnl-showBanner');
         const cancelAd = document.getElementById('tunnl-cancel');
         const demoAd = document.getElementById('tunnl-demo');
@@ -146,10 +146,10 @@ class ImplementationTest {
             midrollTimer.style.background = '#44a5ab';
         }
 
-        pauseGame.addEventListener('click', () => {
+        pauseContent.addEventListener('click', () => {
             window.tunnl.onPause();
         });
-        resumeGame.addEventListener('click', () => {
+        resumeContent.addEventListener('click', () => {
             window.tunnl.onResume();
         });
         showBanner.addEventListener('click', () => {
