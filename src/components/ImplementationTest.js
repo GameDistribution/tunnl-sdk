@@ -160,13 +160,18 @@ class ImplementationTest {
         });
         demoAd.addEventListener('click', () => {
             try {
-                const tag = 'https://pubads.g.doubleclick.net/gampad/ads' +
-                    '?sz=640x480&iu=/124319096/external/single_ad_samples' +
-                    '&ciu_szs=300x250&impl=s&gdfp_req=1&env=vp&output=vast' +
-                    '&unviewed_position_start=1&' +
-                    'cust_params=deployment%3Ddevsite' +
-                    '%26sample_ct%3Dlinear&correlator=';
-                localStorage.setItem('tunnl_tag', tag);
+                if (localStorage.getItem('tunnl_tag')) {
+                    localStorage.removeItem('tunnl_tag');
+                } else {
+                    const tag = 'https://pubads.g.doubleclick.net/gampad/' +
+                        'ads?sz=640x480&iu=/124319096/external/' +
+                        'single_ad_samples&ciu_szs=300x250&impl=' +
+                        's&gdfp_req=1&env=vp&output=vast' +
+                        '&unviewed_position_start=1&' +
+                        'cust_params=deployment%3Ddevsite' +
+                        '%26sample_ct%3Dlinear&correlator=';
+                    localStorage.setItem('tunnl_tag', tag);
+                }
                 location.reload();
             } catch (error) {
                 console.log(error);
@@ -174,7 +179,11 @@ class ImplementationTest {
         });
         midrollTimer.addEventListener('click', () => {
             try {
-                localStorage.setItem('tunnl_midroll', 0);
+                if (localStorage.getItem('tunnl_midroll')) {
+                    localStorage.removeItem('tunnl_midroll');
+                } else {
+                    localStorage.setItem('tunnl_midroll', 0);
+                }
                 location.reload();
             } catch (error) {
                 console.log(error);

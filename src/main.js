@@ -191,7 +191,8 @@ class SDK {
         this.videoAdInstance.tag = 'https://pub.tunnl.com/opp' +
             '?page_url=' + encodeURIComponent(url) +
             '&player_width=640' +
-            '&player_height=480' + adType;
+            '&player_height=480' + adType +
+            '&asset_id=0';
 
         // Enable some debugging perks.
         try {
@@ -252,6 +253,22 @@ class SDK {
                 },
             });
             return false;
+        });
+
+        // Handle auto play behaviour.
+        // Video auto play capabilities are tested within the
+        // VideoAd constructor. We have to test this because browsers will
+        // slowly stop support for auto play.
+        this.videoAdPromise.then(() => {
+            // Check if auto play is enabled and supported. If so, then we
+            // start the adRequestTimer, blocking any attempts
+            // to call any subsequent advertisement too soon, as the ad
+            // will be called automatically from our video advertisement
+            // instance, instead of calling the showBanner method.
+            if (this.videoAdInstance.options.autoplay) {
+                this.videoAdInstance.play();
+                this.adRequestTimer = new Date();
+            }
         });
     }
 
