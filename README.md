@@ -42,7 +42,7 @@ window["TUNNL_OPTIONS"] = {
     if (d.getElementById(id)) return;
     js = d.createElement(s);
     js.id = id;
-    js.src = '//preroll.api.gamedistribution.com/main.min.js';
+    js.src = '//preroll.api.gamedistribution.com/preroll/main.min.js';
     fjs.parentNode.insertBefore(js, fjs);
 }(document, 'script', 'tunnl-jssdk'));
 ```
