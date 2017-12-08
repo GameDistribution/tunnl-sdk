@@ -243,8 +243,7 @@ class VideoAd {
                 this.adContainer.style.transform =
                     'translateX(-9999px)';
                 if (this.thirdPartyContainer) {
-                    this.thirdPartyContainer.style.transform =
-                        'translateX(-9999px)';
+                    this.thirdPartyContainer.style.display = 'none';
                 }
             }, this.containerTransitionSpeed);
         }
@@ -394,7 +393,6 @@ class VideoAd {
             this.containerTransitionSpeed +
             'ms cubic-bezier(0.55, 0, 0.1, 1)';
         if (this.thirdPartyContainer) {
-            this.thirdPartyContainer.style.transform = 'translateX(-9999px)';
             this.thirdPartyContainer.style.opacity = 0;
             this.thirdPartyContainer.style.transition = 'opacity ' +
                 this.containerTransitionSpeed +
@@ -752,8 +750,7 @@ class VideoAd {
                     this.adContainer.style.transform =
                         'translateX(-9999px)';
                     if (this.thirdPartyContainer) {
-                        this.thirdPartyContainer.style.transform =
-                            'translateX(-9999px)';
+                        this.thirdPartyContainer.style.display = 'none';
                     }
                 }, this.containerTransitionSpeed);
             }
