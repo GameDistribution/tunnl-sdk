@@ -96,11 +96,6 @@ class SDK {
         // Call Death Star.
         this._deathStar();
 
-        // Record a "view"-event in Tunnl.
-        (new Image()).src = 'https://ana.tunnl.com/event' +
-            '?page_url=' + encodeURIComponent(url) +
-            '&eventtype=1';
-
         // Setup all event listeners.
         // We also send a Google Analytics event for each one of our events.
         this.eventBus = new EventBus();
@@ -283,8 +278,8 @@ class SDK {
         // life easier. I think.
         try {
             /* eslint-disable */
-            if (typeof ga !== 'undefined') {
-                ga('gd.send', {
+            if (typeof window['ga'] !== 'undefined') {
+                window['ga']('gd.send', {
                     hitType: 'event',
                     eventCategory: (event.analytics.category)
                         ? event.analytics.category
@@ -313,7 +308,7 @@ class SDK {
         /* eslint-disable */
         // Load Google Analytics so we can push out a Google event for
         // each of our events.
-        if (typeof ga === 'undefined') {
+        if (typeof window['ga'] === 'undefined') {
             (function(i, s, o, g, r, a, m) {
                 i['GoogleAnalyticsObject'] = r;
                 i[r] = i[r] || function() {
@@ -327,14 +322,14 @@ class SDK {
             })(window, document, 'script',
                 'https://www.google-analytics.com/analytics.js', 'ga');
         }
-        ga('create', 'UA-60359297-23', {'name': 'gd'}, 'auto');
+        window['ga']('create', 'UA-60359297-23', {'name': 'gd'}, 'auto');
         // Inject Death Star id's to the page view.
         const lcl = getCookie('brzcrz_local');
         if (lcl) {
-            ga('gd.set', 'userId', lcl);
-            ga('gd.set', 'dimension1', lcl);
+            window['ga']('gd.set', 'userId', lcl);
+            window['ga']('gd.set', 'dimension1', lcl);
         }
-        ga('gd.send', 'pageview');
+        window['ga']('gd.send', 'pageview');
 
     }
 
@@ -350,8 +345,8 @@ class SDK {
             var DS_OPTIONS = {
                 id: 'TUNNL',
                 success: function(id) {
-                    ga('gd.set', 'userId', id); 
-                    ga('gd.set', 'dimension1', id);
+                    window['ga']('gd.set', 'userId', id); 
+                    window['ga']('gd.set', 'dimension1', id);
                 }
             }
         `;
