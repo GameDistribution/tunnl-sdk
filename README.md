@@ -17,21 +17,21 @@ The SDK should be integrated within the web page itself by loading it through ou
 ### CDN
 Add the following script to your document.
 ```
-var TUNNL_OPTIONS = {
-    debug: false,
-    container: 'preroll',
-    onEvent: function(event) {
+window["TUNNL_OPTIONS"] = {
+    "debug": false,
+    "container": "preroll",
+    "onEvent": function(event) {
         switch (event.name) {
-            case 'SDK_CONTENT_START':
+            case "SDK_CONTENT_START":
                 // ...
                 break;
-            case 'SDK_CONTENT_PAUSE':
+            case "SDK_CONTENT_PAUSE":
                 // ...
                 break;
-            case 'SDK_READY':
+            case "SDK_READY":
                 // ...
                 break;
-            case 'SDK_ERROR':
+            case "SDK_ERROR":
                 // ...
                 break;
         }
