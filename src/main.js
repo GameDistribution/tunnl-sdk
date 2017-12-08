@@ -86,6 +86,10 @@ class SDK {
         console.log.apply(console, banner);
         /* eslint-enable */
 
+        const url = (document.location.href.indexOf('localhost') !== -1)
+            ? 'https://gamedistribution.com/'
+            : document.location.href;
+
         // Call Google Analytics.
         this._googleAnalytics();
 
@@ -160,86 +164,53 @@ class SDK {
         this.eventBus.subscribe('VOLUME_CHANGED', (arg) => this._onEvent(arg));
         this.eventBus.subscribe('VOLUME_MUTED', (arg) => this._onEvent(arg));
 
-        // Only allow ads after the preroll and after a certain amount of time.
-        // This time restriction is available from gameData.
+        // Only allow ads after the pre-roll and after a certain amount of time.
         this.adRequestTimer = undefined;
         this.adRequestDelay = 60000;
 
-        // Get urls.
-        const url = document.location.href;
-        const domain = document.location.host;
+        // Start our advertisement instance. Setting up the
+        // adsLoader should resolve VideoAdPromise.
+        this.videoAdInstance = new VideoAd(this.options);
 
-        // Tunnl.
-        // Get the affiliate id from Tunnl.
-        // If it fails we continue the game, so this should always resolve.
-        const adTagIdPromise = new Promise((resolve) => {
-            const adTagIdUrl = 'https://ana.tunnl.com/at?id=&pageurl=' + domain + '&type=4';
-            const adTagIdRequest = new Request(adTagIdUrl, {method: 'GET'});
-            let adTagId = 'T-17112273223';
-            fetch(adTagIdRequest).then(response => {
-                const contentType = response.headers.get('content-type');
-                if (contentType &&
-                    contentType.includes('application/json')) {
-                    return response.json();
-                } else {
-                    throw new TypeError('Oops, we didn\'t get JSON!');
+        // Auto play of video advertisements won't work on mobile devices.
+        // Causing the video to be paused.
+        const mobile = (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) ||
+            (navigator.userAgent.toLowerCase().indexOf('android') > -1);
+        const adType = (mobile)
+            ? '&ad_type=image'
+            : '';
+
+        // Create the actual ad tag.
+        this.videoAdInstance.tag = 'https://pub.tunnl.com/opp' +
+            '?page_url=' + encodeURIComponent(url) +
+            '&player_width=640' +
+            '&player_height=480' + adType +
+            '&asset_id=0';
+
+        // Enable some debugging perks.
+        try {
+            if (localStorage.getItem('tunnl_debug')) {
+                // So we can set a custom tag.
+                if (localStorage.getItem('tunnl_tag')) {
+                    this.videoAdInstance.tag =
+                        localStorage.getItem('tunnl_tag');
                 }
-            }).then(json => {
-                if (json.AdTagId) {
-                    adTagId = json.AdTagId;
-                    dankLog('SDK_TAG_ID_READY', adTagId, 'success');
-                    resolve(adTagId);
-                } else {
-                    dankLog('SDK_TAG_ID_READY', adTagId, 'warning');
+                // So we can call mid rolls quickly.
+                if (localStorage.getItem('tunnl_midroll')) {
+                    this.adRequestDelay =
+                        localStorage.getItem('tunnl_midroll');
                 }
-                resolve(adTagId);
-            }).catch((error) => {
-                dankLog('SDK_TAG_ID_READY', error, 'warning');
-                resolve(adTagId);
-            });
-        });
-
-        // Create the ad tag.
-        // This promise can trigger the videoAdPromise.
-        adTagIdPromise.then((response) => {
-            // Start our advertisement instance. Setting up the
-            // adsLoader should resolve VideoAdPromise.
-            this.videoAdInstance = new VideoAd(this.options);
-
-            // Create the actual ad tag.
-            this.videoAdInstance.tag = 'https://pub.tunnl.com/' +
-                'opp?tid=' + response +
-                '&player_width=640' +
-                '&player_height=480' +
-                '&page_url=' + encodeURIComponent(url);
-
-            // Enable some debugging perks.
-            try {
-                if (localStorage.getItem('tunnl_debug')) {
-                    // So we can set a custom tag.
-                    if (localStorage.getItem('tunnl_tag')) {
-                        this.videoAdInstance.tag =
-                            localStorage.getItem('tunnl_tag');
-                    }
-                    // So we can call mid rolls quickly.
-                    if (localStorage.getItem('tunnl_midroll')) {
-                        this.adRequestDelay =
-                            localStorage.getItem('tunnl_midroll');
-                    }
-                }
-            } catch (error) {
-                console.log(error);
             }
-
-            this.videoAdInstance.start();
-        });
+        } catch (error) {
+            console.log(error);
+        }
 
         // Ad ready or failed.
         // Setup our video ad promise, which should be resolved before an ad
-        // can be called from a click event.
-        const videoAdPromise = new Promise((resolve, reject) => {
+        // can be called.
+        this.videoAdPromise = new Promise((resolve, reject) => {
             // The ad is preloaded and ready.
-            this.eventBus.subscribe('AD_SDK_MANAGER_READY', (arg) => resolve());
+            this.eventBus.subscribe('AD_SDK_LOADER_READY', (arg) => resolve());
             // The IMA SDK failed.
             this.eventBus.subscribe('AD_SDK_ERROR', (arg) => reject());
             // It can happen that the first ad request failed... unlucky.
@@ -247,11 +218,23 @@ class SDK {
         });
 
         // Now check if everything is ready.
-        // We use default SDK data if the promise fails.
-        this.readyPromise = Promise.all([
-            adTagIdPromise,
-            videoAdPromise,
-        ]).then(() => {
+        this.videoAdPromise.then(() => {
+            // Handle auto play behaviour.
+            // Video auto play capabilities are tested within the
+            // VideoAd constructor. We have to test this because browsers will
+            // slowly stop support for auto play.
+            // Thus we check if auto play is enabled and supported.
+            // If so, then we start the adRequestTimer, blocking any attempts
+            // to call any subsequent advertisement too soon, as the ad
+            // will be called automatically from our video advertisement
+            // instance, instead of calling the showBanner method.
+            if (this.videoAdInstance.options.autoplay) {
+                this.videoAdInstance.play();
+                this.adRequestTimer = new Date();
+            } else {
+                this.onResume('Just resume to the content...', 'success');
+            }
+
             let eventName = 'SDK_READY';
             let eventMessage = 'Everything is ready.';
             this.eventBus.broadcast(eventName, {
@@ -295,8 +278,8 @@ class SDK {
         // life easier. I think.
         try {
             /* eslint-disable */
-            if (typeof ga !== 'undefined') {
-                ga('gd.send', {
+            if (typeof window['ga'] !== 'undefined') {
+                window['ga']('gd.send', {
                     hitType: 'event',
                     eventCategory: (event.analytics.category)
                         ? event.analytics.category
@@ -325,7 +308,7 @@ class SDK {
         /* eslint-disable */
         // Load Google Analytics so we can push out a Google event for
         // each of our events.
-        if (typeof ga === 'undefined') {
+        if (typeof window['ga'] === 'undefined') {
             (function(i, s, o, g, r, a, m) {
                 i['GoogleAnalyticsObject'] = r;
                 i[r] = i[r] || function() {
@@ -339,14 +322,14 @@ class SDK {
             })(window, document, 'script',
                 'https://www.google-analytics.com/analytics.js', 'ga');
         }
-        ga('create', 'UA-60359297-23', {'name': 'gd'}, 'auto');
+        window['ga']('create', 'UA-60359297-23', {'name': 'gd'}, 'auto');
         // Inject Death Star id's to the page view.
         const lcl = getCookie('brzcrz_local');
         if (lcl) {
-            ga('gd.set', 'userId', lcl);
-            ga('gd.set', 'dimension1', lcl);
+            window['ga']('gd.set', 'userId', lcl);
+            window['ga']('gd.set', 'dimension1', lcl);
         }
-        ga('gd.send', 'pageview');
+        window['ga']('gd.send', 'pageview');
 
     }
 
@@ -362,8 +345,8 @@ class SDK {
             var DS_OPTIONS = {
                 id: 'TUNNL',
                 success: function(id) {
-                    ga('gd.set', 'userId', id); 
-                    ga('gd.set', 'dimension1', id);
+                    window['ga']('gd.set', 'userId', id); 
+                    window['ga']('gd.set', 'dimension1', id);
                 }
             }
         `;
@@ -388,7 +371,7 @@ class SDK {
      * @public
      */
     showBanner() {
-        this.readyPromise.then(() => {
+        this.videoAdPromise.then(() => {
             // Check if ad is not called too often.
             if (typeof this.adRequestTimer !== 'undefined') {
                 const elapsed = (new Date()).valueOf() -
@@ -398,7 +381,7 @@ class SDK {
                         'The advertisement was requested too soon after ' +
                         'the previous advertisement was finished.',
                         'warning');
-                    // Resume game for legacy purposes.
+                    // Resume to content for legacy purposes.
                     this.onResume(
                         'Just resume to the content...',
                         'success');
@@ -425,8 +408,7 @@ class SDK {
      * onResume
      * Called from various moments within the SDK. This sends
      * out a callback to our developer, so he/ she can allow the content to
-     * resume again. We also call resume() for backwards
-     * compatibility reasons.
+     * resume again.
      * @param {String} message
      * @param {String} status
      */
@@ -448,8 +430,7 @@ class SDK {
     /**
      * onPause
      * Called from various moments within the SDK. This sends
-     * out a callback to pause the content. It is required to have the game
-     * paused when an advertisement starts playing.
+     * out a callback to pause the content.
      * @param {String} message
      * @param {String} status
      */
@@ -472,7 +453,7 @@ class SDK {
      * openConsole
      * Enable debugging, we also set a value in localStorage,
      * so we can also enable debugging without setting the property.
-     * This is nice for when we're trying to debug a game that is not ours.
+     * This is nice for when we're trying to debug content that is not ours.
      * @public
      */
     openConsole() {

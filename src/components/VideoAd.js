@@ -2,7 +2,7 @@
 
 import EventBus from '../components/EventBus';
 
-import {extendDefaults} from '../modules/common';
+import {extendDefaults, updateQueryStringParameter} from '../modules/common';
 import {dankLog} from '../modules/dankLog';
 
 let instance = null;
@@ -48,12 +48,23 @@ class VideoAd {
         this.safetyTimer = null;
         this.requestAttempts = 0;
         this.containerTransitionSpeed = 300;
-        this.preroll = true;
+        this.adCount = 0;
         this.tag = 'https://pubads.g.doubleclick.net/gampad/ads' +
             '?sz=640x480&iu=/124319096/external/single_ad_samples' +
             '&ciu_szs=300x250&impl=s&gdfp_req=1&env=vp&output=vast' +
             '&unviewed_position_start=1&cust_params=deployment%3Ddevsite' +
             '%26sample_ct%3Dlinear&correlator=';
+
+        // If our user wants to load the ad within a container.
+        this.thirdPartyContainer = (this.options.container)
+            ? document.getElementById(this.options.container)
+            : null;
+
+        // Set needed dimensions of the third party container if not set.
+        if (this.thirdPartyContainer) {
+            this.thirdPartyContainer.style.width = this.options.width;
+            this.thirdPartyContainer.style.height = this.options.height;
+        }
 
         // Make sure given width and height doesn't contain non-numbers.
         this.options.width = (Number.isInteger(this.options.width))
@@ -63,129 +74,45 @@ class VideoAd {
                 : this.options.width.replace(/[^0-9]/g, '');
         this.options.height = (Number.isInteger(this.options.height))
             ? this.options.height
-            : this.options.height.replace(/[^0-9]/g, '');
+            : (this.options.height === '100%')
+                ? 360
+                : this.options.height.replace(/[^0-9]/g, '');
 
-        // If our user wants to load the ad within a container.
-        this.parentAdContainer = (this.options.container)
-            ? document.getElementById(this.options.container)
-            : null;
-        // Now make sure the parentAdContainer and its parent are
-        // absolute or relative, otherwise our adContainer will go floating
-        // about as its absolute.
-        if (this.parentAdContainer) {
-            if (this.parentAdContainer.style.position !== 'absolute' ||
-                this.parentAdContainer.style.position !== 'fixed') {
-                // Is our parent tall enough? We need a minimum height if
-                // we want to position our ad using absolute.
-                // The parentAdContainer must have an offsetHeight for
-                // responsive ads. Easiest is to not assign the container
-                // option if you want responsive ads.
-                if (this.parentAdContainer.offsetHeight <= 0) {
-                    this.parentAdContainer.style.position = 'relative';
-                    this.parentAdContainer.style.height =
-                        this.options.height + 'px';
-                } else {
-                    this.parentAdContainer.style.position = 'absolute';
-                    this.parentAdContainer.style.zIndex = 99;
-                    this.parentAdContainer.style.top = 0;
-                    this.parentAdContainer.style.left = 0;
-                }
-            }
-            // Make sure the given container has a width.
-            if (this.parentAdContainer.offsetWidth <= 0) {
-                this.parentAdContainer.style.width = this.options.width + 'px';
-            }
+        // Enable a responsive advertisement.
+        // Assuming we only want responsive advertisements
+        // below 1024 pixel client width. Reason for this is that some
+        // advertisers buy based on ad size.
+        this.options.responsive = (this.options.responsive &&
+            document.documentElement.clientWidth <= 1024);
+        if (this.options.responsive || this.thirdPartyContainer) {
+            // Check if the ad container is not already set.
+            // This is usually done when using the Flash SDK.
+            this.options.width = (this.thirdPartyContainer)
+                ? this.thirdPartyContainer.offsetWidth
+                : document.documentElement.clientWidth;
+            this.options.height = (this.thirdPartyContainer)
+                ? this.thirdPartyContainer.offsetHeight
+                : document.documentElement.clientHeight;
         }
 
-        // Analytics variables
-        this.eventCategory = 'AD';
-
-        this.adsLoaderPromise = new Promise((resolve) => {
-            // Wait for adsLoader to be loaded.
-            this.eventBus.subscribe('AD_SDK_LOADER_READY',
-                (arg) => resolve());
-            // But don't wait too long.
-            setTimeout(() => {
-                resolve();
-            }, 3000);
-        });
-        this.adsManagerPromise = new Promise((resolve) => {
-            // Wait for adsManager to be loaded.
-            this.eventBus.subscribe('AD_SDK_MANAGER_READY',
-                (arg) => resolve());
-            // But don't wait too long.
-            setTimeout(() => {
-                resolve();
-            }, 3000);
-        });
-    }
-
-    /**
-     * start
-     * Start the VideoAd instance by first checking if we
-     * have auto play capabilities. By calling start() we start the
-     * creation of the adsLoader, needed to request ads. This is also
-     * the time where we can change other options based on context as well.
-     * @public
-     */
-    start() {
-        // Start ticking our safety timer. If the whole advertisement
-        // thing doesn't resolve without our set time, then screw this.
-        this._startSafetyTimer(8000, 'start()');
+        // Subscribe to the LOADED event as we will want to clear our initial
+        // safety timer, but also start a new one, as sometimes advertisements
+        // can have trouble starting.
         this.eventBus.subscribe('LOADED', () => {
             // Start our safety timer every time an ad is loaded.
             // It can happen that an ad loads and starts, but has an error
             // within itself, so we never get an error event from IMA.
             this._clearSafetyTimer('LOADED');
-            this._startSafetyTimer(4000, 'LOADED');
-            // Show the advertisement container.
-            if (this.adContainer) {
-                this.adContainer.style.transform =
-                    'translateX(0)';
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.transform =
-                        'translateX(0)';
-                    // Sometimes our client set the container to display none.
-                    this.parentAdContainer.style.display =
-                        'block';
-                }
-                setTimeout(() => {
-                    this.adContainer.style.opacity = 1;
-                    if (this.parentAdContainer) {
-                        this.parentAdContainer.style.opacity = 1;
-                    }
-                }, 10);
-            }
+            this._startSafetyTimer(8000, 'LOADED');
         });
 
-        // If we have auto play then we clear the safetyTimer when the ad
-        // has actually started playing. However, if we do not have auto play
-        // then we need to wait for a user action, which can take an eternity.
+        // Subscribe to the STARTED event, so we can clear the safety timer
+        // started from the LOADED event. This is to avoid any problems within
+        // an advertisement itself, like when it doesn't start or has
+        // a javascript error, which is common with VPAID.
         this.eventBus.subscribe('STARTED', () => {
             this._clearSafetyTimer('STARTED');
         });
-        if (!this.options.autoplay ||
-            (this.options.autoplay && !this.options.preroll)) {
-            this.eventBus.subscribe('AD_SDK_MANAGER_READY', () => {
-                this._clearSafetyTimer('AD_SDK_MANAGER_READY');
-            });
-        }
-
-        // Enable a responsive advertisement.
-        // Assuming we only want responsive advertisements
-        // below 1024 pixel client width.
-        this.options.responsive = (this.options.responsive &&
-            document.documentElement.clientWidth <= 1024);
-        if (this.options.responsive || this.parentAdContainer) {
-            // Check if the ad container is not already set.
-            // This is usually done when using the Flash SDK.
-            this.options.width = (this.parentAdContainer)
-                ? this.parentAdContainer.offsetWidth
-                : document.documentElement.clientWidth;
-            this.options.height = (this.parentAdContainer)
-                ? this.parentAdContainer.offsetHeight
-                : document.documentElement.clientHeight;
-        }
 
         // We now want to know if we're going to run the advertisement
         // with autoplay enabled.
@@ -210,17 +137,22 @@ class VideoAd {
                     audio.volume = 0;
                     audio.addEventListener('playing', () => {
                         this.options.autoplay = true;
-                    }, false);
-                    audio.src = src;
-                    setTimeout(() => {
                         dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
                             'success');
                         resolve();
-                    }, 100);
-                } catch (e) {
+                    }, false);
+                    audio.src = src;
+                    setTimeout(() => {
+                        if (!this.options.autoplay) {
+                            dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
+                                'success');
+                            resolve();
+                        }
+                    }, 500);
+                } catch (error) {
                     dankLog('AD_SDK_AUTOPLAY', this.options.autoplay,
                         'warning');
-                    reject(e);
+                    reject(error);
                 }
             } else {
                 dankLog('AD_SDK_AUTOPLAY', this.options.autoplay, 'success');
@@ -231,8 +163,26 @@ class VideoAd {
         });
 
         // Now request the IMA SDK script.
-        isAutoPlayPromise.then(() => this._loadIMAScript()).
+        // As all variables are ready and set.
+        isAutoPlayPromise.
+            then(() => this._loadIMAScript()).
             catch((error) => this._onError(error));
+
+        // Setup a simple promise to resolve if the IMA loader is ready.
+        // We mainly do this because showBanner() can be called before we've
+        // even setup our ad.
+        this.adsLoaderPromise = new Promise((resolve) => {
+            // Wait for adsLoader to be loaded.
+            this.eventBus.subscribe('AD_SDK_LOADER_READY',
+                (arg) => resolve());
+        });
+
+        // Setup a promise to resolve if the IMA manager is ready.
+        this.adsManagerPromise = new Promise((resolve) => {
+            // Wait for adsManager to be loaded.
+            this.eventBus.subscribe('AD_SDK_MANAGER_READY',
+                (arg) => resolve());
+        });
     }
 
     /**
@@ -241,6 +191,9 @@ class VideoAd {
      * @public
      */
     play() {
+        // Request an advertisement.
+        this._requestAds();
+
         // Play the requested advertisement whenever the adsManager is ready.
         this.adsManagerPromise.then(() => {
             // The IMA HTML5 SDK uses the AdDisplayContainer to play the
@@ -281,14 +234,16 @@ class VideoAd {
         // Hide the advertisement.
         if (this.adContainer) {
             this.adContainer.style.opacity = 0;
-            if (this.parentAdContainer) {
-                this.parentAdContainer.style.opacity = 0;
+            if (this.thirdPartyContainer) {
+                this.thirdPartyContainer.style.opacity = 0;
             }
             setTimeout(() => {
+                // We do not use display none. Otherwise element.offsetWidth
+                // and height will return 0px.
                 this.adContainer.style.transform =
                     'translateX(-9999px)';
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.transform =
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.transform =
                         'translateX(-9999px)';
                 }
             }, this.containerTransitionSpeed);
@@ -310,31 +265,39 @@ class VideoAd {
                 this.adsLoader.contentComplete();
             }
 
+            // Re-set the IMA manager promise.
+            this.adsManagerPromise = new Promise((resolve) => {
+                // Wait for adsManager to be loaded.
+                this.eventBus.subscribe('AD_SDK_MANAGER_READY',
+                    (arg) => resolve());
+            });
+
             // Preload new ads by doing a new request.
             if (this.requestAttempts <= 3) {
                 if (this.requestAttempts > 1) {
                     dankLog('AD_SDK_REQUEST_ATTEMPT', this.requestAttempts,
                         'warning');
                 }
-                this._requestAds();
+                // Todo: disabled for now.
+                // this.requestAds();
                 this.requestAttempts++;
             }
-
-            // Send event to tell that the whole advertisement
-            // thing is finished.
-            let eventName = 'AD_CANCELED';
-            let eventMessage = 'Advertisement has been canceled.';
-            this.eventBus.broadcast(eventName, {
-                name: eventName,
-                message: eventMessage,
-                status: 'warning',
-                analytics: {
-                    category: this.eventCategory,
-                    action: eventName,
-                    label: eventMessage,
-                },
-            });
         }).catch((error) => console.log(error));
+
+        // Send event to tell that the whole advertisement
+        // thing is finished.
+        let eventName = 'AD_CANCELED';
+        let eventMessage = 'Advertisement has been canceled.';
+        this.eventBus.broadcast(eventName, {
+            name: eventName,
+            message: eventMessage,
+            status: 'warning',
+            analytics: {
+                category: this.eventCategory,
+                action: eventName,
+                label: eventMessage,
+            },
+        });
     }
 
     /**
@@ -416,7 +379,7 @@ class VideoAd {
 
         this.adContainer = document.createElement('div');
         this.adContainer.id = this.options.prefix + 'advertisement';
-        this.adContainer.style.position = (this.parentAdContainer)
+        this.adContainer.style.position = (this.thirdPartyContainer)
             ? 'absolute'
             : 'fixed';
         this.adContainer.style.zIndex = 99;
@@ -424,17 +387,25 @@ class VideoAd {
         this.adContainer.style.left = 0;
         this.adContainer.style.width = '100%';
         this.adContainer.style.height = '100%';
+        this.adContainer.style.transform = 'translateX(-9999px)';
         this.adContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
         this.adContainer.style.opacity = 0;
         this.adContainer.style.transition = 'opacity ' +
             this.containerTransitionSpeed +
             'ms cubic-bezier(0.55, 0, 0.1, 1)';
+        if (this.thirdPartyContainer) {
+            this.thirdPartyContainer.style.transform = 'translateX(-9999px)';
+            this.thirdPartyContainer.style.opacity = 0;
+            this.thirdPartyContainer.style.transition = 'opacity ' +
+                this.containerTransitionSpeed +
+                'ms cubic-bezier(0.55, 0, 0.1, 1)';
+        }
 
         const adContainerInner = document.createElement('div');
         adContainerInner.id = this.options.prefix + 'advertisement_slot';
         adContainerInner.style.position = 'absolute';
         adContainerInner.style.backgroundColor = '#000000';
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             adContainerInner.style.top = 0;
             adContainerInner.style.left = 0;
         } else {
@@ -448,9 +419,9 @@ class VideoAd {
 
         // Append the adContainer to our Flash container, when using the
         // Flash SDK implementation.
-        if (this.parentAdContainer) {
+        if (this.thirdPartyContainer) {
             this.adContainer.appendChild(adContainerInner);
-            this.parentAdContainer.appendChild(this.adContainer);
+            this.thirdPartyContainer.appendChild(this.adContainer);
         } else {
             this.adContainer.appendChild(adContainerInner);
             body.appendChild(this.adContainer);
@@ -458,13 +429,13 @@ class VideoAd {
 
         // We need to resize our adContainer
         // when the view dimensions change.
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             window.addEventListener('resize', () => {
-                this.options.width = (this.parentAdContainer)
-                    ? this.parentAdContainer.offsetWidth
+                this.options.width = (this.thirdPartyContainer)
+                    ? this.thirdPartyContainer.offsetWidth
                     : document.documentElement.clientWidth;
-                this.options.height = (this.parentAdContainer)
-                    ? this.parentAdContainer.offsetHeight
+                this.options.height = (this.thirdPartyContainer)
+                    ? this.thirdPartyContainer.offsetHeight
                     : document.documentElement.clientHeight;
                 adContainerInner.style.width = this.options.width + 'px';
                 adContainerInner.style.height = this.options.height + 'px';
@@ -535,9 +506,6 @@ class VideoAd {
                 action: eventName,
             },
         });
-
-        // Request new video ads to be pre-loaded.
-        this._requestAds();
     }
 
     /**
@@ -551,7 +519,7 @@ class VideoAd {
             return;
         }
 
-        // First check if we can run ads. If the game is embedded within a
+        // First check if we can run ads. If the content is embedded within a
         // Phone Gap/ Cordova app, then we're not allowed.
         if (navigator.userAgent.match(/Crosswalk/i) ||
             typeof window.cordova !== 'undefined') {
@@ -561,9 +529,23 @@ class VideoAd {
             return;
         }
 
+        // Start ticking our safety timer. If the whole advertisement
+        // thing doesn't resolve within our set time, then screw this.
+        this._startSafetyTimer(12000, '_requestAds()');
+
         try {
             // Request video new ads.
             const adsRequest = new google.ima.AdsRequest();
+
+            // Update our adTag. We add additional parameters so Tunnl
+            // can use the values as new metrics within reporting.
+            this.adCount++;
+            const positionCount = this.adCount - 1;
+            this.tag = updateQueryStringParameter(this.tag, 'ad_count',
+                this.adCount);
+            this.tag = updateQueryStringParameter(this.tag, 'ad_position',
+                (this.adCount === 1) ? 'preroll' : 'midroll' +
+                    positionCount.toString());
             adsRequest.adTagUrl = this.tag;
 
             // Specify the linear and nonlinear slot sizes. This helps
@@ -573,24 +555,14 @@ class VideoAd {
             adsRequest.nonLinearAdSlotWidth = this.options.width;
             adsRequest.nonLinearAdSlotHeight = this.options.height;
 
-            // We don't want overlays as we do not support video!
+            // We don't want overlays as we do not have
+            // a video player as underlying content!
+            // Non-linear ads usually do not invoke the ALL_ADS_COMPLETED.
+            // That would cause lots of problems of course...
             adsRequest.forceNonLinearFullSlot = true;
 
             // Get us some ads!
             this.adsLoader.requestAds(adsRequest);
-
-            // Send event.
-            let eventName = 'AD_SDK_LOADER_READY';
-            this.eventBus.broadcast(eventName, {
-                name: eventName,
-                message: this.tag,
-                status: 'success',
-                analytics: {
-                    category: this.eventCategory,
-                    action: eventName,
-                    label: this.tag,
-                },
-            });
         } catch (e) {
             this._onAdError(e);
         }
@@ -606,11 +578,13 @@ class VideoAd {
     _onAdsManagerLoaded(adsManagerLoadedEvent) {
         // Get the ads manager.
         const adsRenderingSettings = new google.ima.AdsRenderingSettings();
-        adsRenderingSettings.enablePreloading = true;
+        // We can't preload advertisements, as this would cause too many
+        // ad requests unresolved, which messes up reporting services.
+        // adsRenderingSettings.enablePreloading = true;
         adsRenderingSettings.restoreCustomPlaybackStateOnAdBreakComplete = true;
 
         // We don't set videoContent as in the Google IMA example docs,
-        // cause we run a game, not an ad.
+        // cause we run on top of content, not an ad.
         this.adsManager = adsManagerLoadedEvent.getAdsManager(
             adsRenderingSettings);
 
@@ -678,7 +652,7 @@ class VideoAd {
             this._onAdEvent.bind(this), this);
 
         // We need to resize our adContainer when the view dimensions change.
-        if (this.options.responsive || this.parentAdContainer) {
+        if (this.options.responsive || this.thirdPartyContainer) {
             window.addEventListener('resize', () => {
                 this.adsManager.resize(this.options.width, this.options.height,
                     google.ima.ViewMode.NORMAL);
@@ -700,12 +674,6 @@ class VideoAd {
                     action: eventName,
                 },
             });
-        }
-
-        // Run the ad if autoplay is enabled. Only once.
-        if (this.options.autoplay && this.preroll) {
-            this.preroll = false;
-            this.play();
         }
     }
 
@@ -734,18 +702,57 @@ class VideoAd {
             eventName = 'ALL_ADS_COMPLETED';
             eventMessage = 'Fired when the ads manager is done playing all ' +
                 'the ads.';
+            break;
+        case google.ima.AdEvent.Type.CLICK:
+            eventName = 'CLICK';
+            eventMessage = 'Fired when the ad is clicked.';
+            break;
+        case google.ima.AdEvent.Type.COMPLETE:
+            eventName = 'COMPLETE';
+            eventMessage = 'Fired when the ad completes playing.';
+            break;
+        case google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED:
+            eventName = 'CONTENT_PAUSE_REQUESTED';
+            eventMessage = 'Fired when content should be paused. This ' +
+                'usually happens right before an ad is about to cover ' +
+                'the content.';
+
+            // Show the advertisement container.
+            if (this.adContainer) {
+                this.adContainer.style.transform =
+                    'translateX(0)';
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.transform =
+                        'translateX(0)';
+                }
+                setTimeout(() => {
+                    this.adContainer.style.opacity = 1;
+                    if (this.thirdPartyContainer) {
+                        this.thirdPartyContainer.style.opacity = 1;
+                        // Sometimes the third party sets our container to none.
+                        this.thirdPartyContainer.style.display = 'block';
+                    }
+                }, 10);
+            }
+            break;
+        case google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED:
+            eventName = 'CONTENT_RESUME_REQUESTED';
+            eventMessage = 'Fired when content should be resumed. This ' +
+                'usually happens when an ad finishes or collapses.';
 
             // Hide the advertisement.
             if (this.adContainer) {
                 this.adContainer.style.opacity = 0;
-                if (this.parentAdContainer) {
-                    this.parentAdContainer.style.opacity = 0;
+                if (this.thirdPartyContainer) {
+                    this.thirdPartyContainer.style.opacity = 0;
                 }
                 setTimeout(() => {
+                    // We do not use display none. Otherwise element.offsetWidth
+                    // and height will return 0px.
                     this.adContainer.style.transform =
                         'translateX(-9999px)';
-                    if (this.parentAdContainer) {
-                        this.parentAdContainer.style.transform =
+                    if (this.thirdPartyContainer) {
+                        this.thirdPartyContainer.style.transform =
                             'translateX(-9999px)';
                     }
                 }, this.containerTransitionSpeed);
@@ -767,8 +774,12 @@ class VideoAd {
                     this.adsLoader.contentComplete();
                 }
 
-                // Preload new ads by doing a new request.
-                this._requestAds();
+                // Re-set the IMA manager promise.
+                this.adsManagerPromise = new Promise((resolve) => {
+                    // Wait for adsManager to be loaded.
+                    this.eventBus.subscribe('AD_SDK_MANAGER_READY',
+                        (arg) => resolve());
+                });
 
                 // Send event to tell that the whole advertisement
                 // thing is finished.
@@ -786,25 +797,6 @@ class VideoAd {
                 });
             }).catch((error) => console.log(error));
 
-            break;
-        case google.ima.AdEvent.Type.CLICK:
-            eventName = 'CLICK';
-            eventMessage = 'Fired when the ad is clicked.';
-            break;
-        case google.ima.AdEvent.Type.COMPLETE:
-            eventName = 'COMPLETE';
-            eventMessage = 'Fired when the ad completes playing.';
-            break;
-        case google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED:
-            eventName = 'CONTENT_PAUSE_REQUESTED';
-            eventMessage = 'Fired when content should be paused. This ' +
-                'usually happens right before an ad is about to cover ' +
-                'the content.';
-            break;
-        case google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED:
-            eventName = 'CONTENT_RESUME_REQUESTED';
-            eventMessage = 'Fired when content should be resumed. This ' +
-                'usually happens when an ad finishes or collapses.';
             break;
         case google.ima.AdEvent.Type.DURATION_CHANGE:
             eventName = 'DURATION_CHANGE';
