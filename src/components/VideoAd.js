@@ -393,6 +393,7 @@ class VideoAd {
             this.containerTransitionSpeed +
             'ms cubic-bezier(0.55, 0, 0.1, 1)';
         if (this.thirdPartyContainer) {
+            this.thirdPartyContainer.style.zIndex = 4;
             this.thirdPartyContainer.style.opacity = 0;
             this.thirdPartyContainer.style.transition = 'opacity ' +
                 this.containerTransitionSpeed +
